@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Top Trends in Digital Assets 2026</title>
+  <meta property="og:title" content="Top Trends in Digital Assets 2026">
+  <meta property="og:description" content="What excites you for 2026? Vote on the top digital asset trends and see how you compare.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Top Trends in Digital Assets 2026">
+  <meta name="twitter:description" content="What excites you for 2026? Vote on the top digital asset trends and see how you compare.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Webinar Banner -->
+  <div class="webinar-banner">
+    <a href="https://luma.com/s23ich2u" target="_blank" rel="noopener">
+      Join our free webinar: <strong>Onchain Capital Markets: Vaults, ETFs, and Tokenized Funds</strong> — February 19 → Register now
+    </a>
+  </div>
+
+  <!-- Confetti canvas -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Live vote counter (always visible) -->
+  <div class="live-counter">
+    <span><strong id="total-votes">180</strong> votes cast · <strong>15</strong> trends</span>
+  </div>
+
+  <div class="container">
+
+    <!-- ═══ PHASE 1: Excitement Filter ═══ -->
+    <section id="phase1" class="phase-section">
+      <header class="header">
+        <h1>Top Trends in Digital Assets 2026</h1>
+        <p class="subtitle">What excites you for 2026?</p>
+      </header>
+
+      <div class="phase1-card-area">
+        <div class="trend-card-single" id="phase1-card">
+          <span class="trend-name-large" id="phase1-trend-name"></span>
+        </div>
+      </div>
+
+      <div class="vote-buttons">
+        <button class="vote-btn excited" onclick="phase1Vote('excited')">Excited 🔥</button>
+        <button class="vote-btn meh" onclick="phase1Vote('meh')">Meh 😐</button>
+        <button class="vote-btn skip" onclick="phase1Vote('skip')">Skip ⏭️</button>
+      </div>
+
+      <div class="progress-row">
+        <span class="progress-text"><span id="p1-current">1</span> / 15</span>
+        <div class="progress-bar">
+          <div class="progress-fill" id="p1-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Global rankings shown below voting -->
+      <div id="voting-global-rankings" class="voting-global-rankings">
+        <h4 class="voting-rankings-heading">Global Rankings</h4>
+        <div id="voting-global-list"></div>
+      </div>
+    </section>
+
+    <!-- ═══ PHASE 2: Top Pick Selection ═══ -->
+    <section id="phase2" class="phase-section hidden">
+      <header class="header">
+        <h1>Top Trends in Digital Assets 2026</h1>
+        <p class="subtitle" id="p2-subtitle"></p>
+      </header>
+
+      <p class="pick-prompt" id="p2-prompt"></p>
+
+      <div class="pick-grid" id="p2-grid"></div>
+    </section>
+
+    <!-- ═══ RESULTS ═══ -->
+    <section id="results-section" class="phase-section hidden">
+      <header class="header">
+        <h1 id="results-headline">Your 2026 Top Trends</h1>
+        <p class="subtitle" id="results-subtext"></p>
+      </header>
+
+      <!-- Section 1: Your Top 3 -->
+      <div id="top-picks-section">
+        <h3 class="section-heading">Your Top 3</h3>
+        <div id="top-picks-list"></div>
+      </div>
+
+      <!-- Section 2: Your contrarian take -->
+      <div id="contrarian-section" class="hidden">
+        <div class="contrarian-callout" id="contrarian-callout"></div>
+      </div>
+
+      <!-- Section 3: Also excited about -->
+      <div id="also-excited-section" class="hidden">
+        <h3 class="section-heading">Also excited about</h3>
+        <div id="also-excited-list"></div>
+      </div>
+
+      <!-- Section 4: Global Rankings -->
+      <h3 class="section-heading">Global Rankings</h3>
+      <div id="global-rankings"></div>
+
+      <!-- Section 5: Actions -->
+      <div class="actions-row">
+        <button class="download-btn" onclick="downloadScorecard()">Download Scorecard</button>
+        <button class="share-btn" onclick="shareOnLinkedIn()">Share on LinkedIn</button>
+        <button class="share-btn" onclick="shareOnX()">Share on X</button>
+        <button class="share-btn share-copy" onclick="copyLink()">Copy link</button>
+      </div>
+
+      <!-- Section 6: Vote Again -->
+      <div class="vote-again-card">
+        <p class="vote-again-copy">Rankings update live. Share yours.</p>
+        <button class="vote-again-btn" onclick="voteAgain()">Vote again →</button>
+      </div>
+    </section>
+
+    <!-- Resume prompt -->
+    <div id="resume-prompt" class="resume-prompt hidden">
+      <p>Looks like you were in the middle of voting.</p>
+      <div class="resume-buttons">
+        <button class="vote-btn excited" onclick="resumeVoting()">Continue where I left off</button>
+        <button class="vote-btn meh" onclick="startFresh()">Start fresh</button>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="site-footer">
+    <span>built by <a href="https://www.linkedin.com/in/maximilian-vargas/" target="_blank" rel="noopener">@maximilianvargas</a></span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" onerror="window._supabaseFailed=true"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
