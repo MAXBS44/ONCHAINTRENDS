@@ -39,7 +39,7 @@ const SEED_DATA = {
   'AI Agents on Crypto Rails':         { excited_rate: 0.34, cold_rate: 0.66, first_pick_rate: 0.02 },
   'Payments-focused Blockchains':      { excited_rate: 0.29, cold_rate: 0.71, first_pick_rate: 0.02 },
 };
-const SEED_VOTERS = 317;
+const SEED_VOTES = 324 * 15;  // 4860 seed votes (324 users × 15 trends each)
 
 // ── Supabase client ──
 let db = null;
@@ -66,12 +66,12 @@ let isAnimating = false;
 let contrarianData = null;
 let rankingsUnlocked = false;
 
-// ── Vote counter ──
-let realSessionCount = 0;
+// ── Vote counter (counts individual trend votes, not sessions) ──
+let realVoteCount = 0;   // sum of all votes from trend_stats minus seed
 let localVotesBumps = 0;
 
-function getTotalVoters() {
-  return SEED_VOTERS + realSessionCount + localVotesBumps;
+function getTotalVotes() {
+  return SEED_VOTES + realVoteCount + localVotesBumps;
 }
 
 // ── Helpers ──
@@ -94,7 +94,7 @@ function getDisplayStats() {
         // Use per-trend vote totals for accurate percentages
         const trendTotal = (s.excited_count || 0) + (s.meh_count || 0) + (s.skip_count || 0);
         // For first pick %, use total completed sessions (people who actually picked a #1)
-        const totalSessions = getTotalVoters();
+        const totalSessions = getTotalVotes();
         return {
           name: s.name,
           excitedPct: trendTotal > 0 ? Math.round(((s.excited_count || 0) / trendTotal) * 100) : 0,
@@ -123,7 +123,7 @@ function getSentimentForTrend(trendName) {
 
 function updateVoteCounter() {
   const el = document.getElementById('total-votes');
-  if (el) el.textContent = getTotalVoters().toLocaleString();
+  if (el) el.textContent = getTotalVotes().toLocaleString();
 }
 
 // ── Realtime polling ──
@@ -268,11 +268,8 @@ function phase1Vote(choice) {
   document.getElementById('p1-progress-fill').style.width = pct + '%';
   document.getElementById('p1-current').textContent = Math.min(phase1Index + 1, TRENDS.length);
 
-  // Only bump counter once per full session (not per swipe)
-  if (phase1Index === 1) {
-    localVotesBumps++;
-    updateVoteCounter();
-  }
+  localVotesBumps++;
+  updateVoteCounter();
 
   showSentimentBars(trend, choice);
 }
@@ -531,9 +528,9 @@ async function submitAndShowResults() {
         }
 
         // Refresh stats and update display
-        const displayedBefore = getTotalVoters();
+        const displayedBefore = getTotalVotes();
         await loadGlobalStats();
-        const dbTotal = SEED_VOTERS + realSessionCount;
+        const dbTotal = SEED_VOTES + realVoteCount;
         if (dbTotal >= displayedBefore) {
           localVotesBumps = 0;
         } else {
@@ -558,17 +555,13 @@ async function loadGlobalStats() {
     if (error) { console.warn('[data] trend_stats error:', error.message); }
     else if (data && data.length) {
       globalStats = data;
-      console.log('[data] trend_stats loaded:', data.length, 'trends');
+      // Compute real vote count: total votes in DB minus seed votes
+      const dbTotalVotes = data.reduce((sum, s) =>
+        sum + (s.excited_count || 0) + (s.meh_count || 0) + (s.skip_count || 0), 0);
+      realVoteCount = Math.max(0, dbTotalVotes - SEED_VOTES);
+      console.log('[data] trend_stats loaded:', data.length, 'trends, dbVotes:', dbTotalVotes, 'real:', realVoteCount, '→ displayed:', getTotalVotes());
     }
   } catch(e) { console.warn('[data] trend_stats exception:', e); }
-  try {
-    const { count, error } = await db.from('voter_sessions').select('*', { count: 'exact', head: true });
-    if (error) { console.warn('[data] voter_sessions count error:', error.message); }
-    else if (count != null) {
-      realSessionCount = count;
-      console.log('[data] voter_sessions count:', count, '→ total displayed:', getTotalVoters());
-    }
-  } catch(e) { console.warn('[data] voter_sessions exception:', e); }
   updateVoteCounter();
 }
 
@@ -598,7 +591,7 @@ function showResults() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const isSkeptic = excitedTrends.length === 0;
-  const totalVoters = getTotalVoters();
+  const totalVoters = getTotalVotes();
 
   // Update the results vote counter
   const resultsVoteEl = document.getElementById('results-vote-count');
@@ -647,7 +640,7 @@ function renderTopPicks(isSkeptic) {
 }
 
 function renderResultsStats() {
-  const totalVoters = getTotalVoters();
+  const totalVoters = getTotalVotes();
   const stats = getDisplayStats();
   const global1 = stats[0];
 
@@ -716,7 +709,7 @@ function renderAlsoExcited() {
 function renderGlobalRankings() {
   const el = document.getElementById('global-rankings');
   const stats = getDisplayStats();
-  const totalVoters = getTotalVoters();
+  const totalVoters = getTotalVotes();
 
   el.innerHTML = `<div class="rankings-table">
     <div class="rankings-header-row">
@@ -799,7 +792,7 @@ function fireConfetti() {
 
 function getShareText() {
   const pick1 = top3[0];
-  const totalVoters = getTotalVoters();
+  const totalVoters = getTotalVotes();
   if (!pick1) {
     return `I just voted on the Top Trends in Digital Assets 2026 — and I'm not excited about any of them. Call me a skeptic.\n\nWhat's your take?\n\nhttps://${DOMAIN}`;
   }
@@ -835,7 +828,7 @@ async function downloadScorecard() {
 
   const isSkeptic = excitedTrends.length === 0;
   const stats = getDisplayStats();
-  const totalVoters = getTotalVoters();
+  const totalVoters = getTotalVotes();
   const global1 = stats[0];
 
   const offscreen = document.createElement('div');

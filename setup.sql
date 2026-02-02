@@ -53,30 +53,29 @@ do $$ begin
 end $$;
 
 -- ══════════════════════════════════════════
--- UPDATE SEED DATA to 317 base voters
+-- UPDATE SEED DATA to 324 base voters
 -- This uses ON CONFLICT to update existing rows or insert new ones
 -- Safe to run even if rows already exist from previous seed
 -- ══════════════════════════════════════════
--- Rates: excited_count = excited_rate * 317, meh_count = cold_rate * 317
--- skip = 317 - excited - meh (remainder)
--- first_pick_count = first_pick_rate * 317
+-- Rates: excited_count = excited_rate * 324, meh_count = cold_rate * 324
+-- first_pick_count = first_pick_rate * 324
 
 insert into trend_stats (name, excited_count, meh_count, skip_count, first_pick_count, total_voters) values
-  ('Tokenized Equities',               235, 82, 0, 57, 317),
-  ('Onchain Vaults',                    225, 92, 0, 44, 317),
-  ('Prediction Markets',                219, 98, 0, 38, 317),
-  ('Equity Perpetuals',                 203, 114, 0, 29, 317),
-  ('Stablecoin-linked Cards',           197, 120, 0, 25, 317),
-  ('Onchain Privacy',                   184, 133, 0, 22, 317),
-  ('Stablecoin-based Cross-Border Payments', 178, 139, 0, 19, 317),
-  ('Tokenized Collateral in Traditional Markets', 168, 149, 0, 16, 317),
-  ('Stablecoin-based Neobanks',         162, 155, 0, 13, 317),
-  ('Regulated ICOs',                    149, 168, 0, 13, 317),
-  ('Onchain FX',                        139, 178, 0, 10, 317),
-  ('Undercollateralized Lending',        130, 187, 0, 10, 317),
-  ('Yield Tokenization',                120, 197, 0, 10, 317),
-  ('AI Agents on Crypto Rails',         108, 209, 0, 6, 317),
-  ('Payments-focused Blockchains',      92, 225, 0, 6, 317)
+  ('Tokenized Equities',               240, 84, 0, 58, 324),
+  ('Onchain Vaults',                    230, 94, 0, 45, 324),
+  ('Prediction Markets',                224, 100, 0, 39, 324),
+  ('Equity Perpetuals',                 207, 117, 0, 29, 324),
+  ('Stablecoin-linked Cards',           201, 123, 0, 26, 324),
+  ('Onchain Privacy',                   188, 136, 0, 23, 324),
+  ('Stablecoin-based Cross-Border Payments', 181, 143, 0, 19, 324),
+  ('Tokenized Collateral in Traditional Markets', 172, 152, 0, 16, 324),
+  ('Stablecoin-based Neobanks',         165, 159, 0, 13, 324),
+  ('Regulated ICOs',                    152, 172, 0, 13, 324),
+  ('Onchain FX',                        143, 181, 0, 10, 324),
+  ('Undercollateralized Lending',        133, 191, 0, 10, 324),
+  ('Yield Tokenization',                123, 201, 0, 10, 324),
+  ('AI Agents on Crypto Rails',         110, 214, 0, 6, 324),
+  ('Payments-focused Blockchains',      94, 230, 0, 6, 324)
 on conflict (name) do update set
   excited_count = excluded.excited_count,
   meh_count = excluded.meh_count,
