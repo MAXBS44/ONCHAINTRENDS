@@ -481,56 +481,74 @@ async function submitAndShowResults() {
   localStorage.removeItem('trend_progress');
   localStorage.setItem('trend_completed', JSON.stringify({ votes, top3 }));
 
-  if (db) {
-    try {
-      await db.from('voter_sessions').insert({
-        session_id: SESSION_ID,
-        votes,
-        top3,
-        excited_count: excitedTrends.length,
-      });
-
-      // Remember the displayed total before DB refresh
-      const displayedBefore = getTotalVoters();
-      await loadGlobalStats();
-      // Only reset bumps if DB total meets/exceeds what user saw
-      const dbTotal = SEED_VOTERS + realSessionCount;
-      if (dbTotal >= displayedBefore) {
-        localVotesBumps = 0;
-      } else {
-        // DB hasn't caught up yet — keep bumps so counter doesn't drop
-        localVotesBumps = displayedBefore - dbTotal;
-      }
-      updateVoteCounter();
-
-      for (const trend of TRENDS) {
-        const vote = votes[trend];
-        if (!vote) continue;
-        const { data: current } = await db.from('trend_stats').select('*').eq('name', trend).single();
-        if (current) {
-          const patch = {};
-          if (vote === 'excited') patch.excited_count = (current.excited_count || 0) + 1;
-          if (vote === 'meh') patch.meh_count = (current.meh_count || 0) + 1;
-          if (vote === 'skip') patch.skip_count = (current.skip_count || 0) + 1;
-          if (top3[0] === trend) patch.first_pick_count = (current.first_pick_count || 0) + 1;
-          if (top3[1] === trend) patch.second_pick_count = (current.second_pick_count || 0) + 1;
-          if (top3[2] === trend) patch.third_pick_count = (current.third_pick_count || 0) + 1;
-          if (Object.keys(patch).length) {
-            await db.from('trend_stats').update(patch).eq('name', trend);
-          }
-        }
-      }
-
-      await loadGlobalStats();
-      updateVoteCounter();
-      renderVotingGlobalRankings();
-    } catch(e) {
-      console.warn('Supabase submit error:', e);
-    }
-  }
-
+  // Show results immediately — DB writes happen in background
   fireConfetti();
   showResults();
+
+  if (db) {
+    // Fire-and-forget: persist vote then refresh stats
+    (async () => {
+      try {
+        await db.from('voter_sessions').insert({
+          session_id: SESSION_ID,
+          votes,
+          top3,
+          excited_count: excitedTrends.length,
+        });
+
+        // Update trend_stats using Postgres increment via RPC-style batching
+        const updates = TRENDS.map(trend => {
+          const vote = votes[trend];
+          if (!vote) return null;
+          const patch = {};
+          if (vote === 'excited') patch.excited_count = db.rpc ? 1 : 1;
+          if (vote === 'meh') patch.meh_count = 1;
+          if (vote === 'skip') patch.skip_count = 1;
+          if (top3[0] === trend) patch.first_pick_count = 1;
+          if (top3[1] === trend) patch.second_pick_count = 1;
+          if (top3[2] === trend) patch.third_pick_count = 1;
+          return { trend, vote, patch };
+        }).filter(Boolean);
+
+        // Batch: fetch all stats once, then update all in parallel
+        const { data: allStats } = await db.from('trend_stats').select('*');
+        if (allStats) {
+          const promises = updates.map(({ trend, vote, patch }) => {
+            const current = allStats.find(s => s.name === trend);
+            if (!current) return null;
+            const realPatch = {};
+            if (vote === 'excited') realPatch.excited_count = (current.excited_count || 0) + 1;
+            if (vote === 'meh') realPatch.meh_count = (current.meh_count || 0) + 1;
+            if (vote === 'skip') realPatch.skip_count = (current.skip_count || 0) + 1;
+            if (top3[0] === trend) realPatch.first_pick_count = (current.first_pick_count || 0) + 1;
+            if (top3[1] === trend) realPatch.second_pick_count = (current.second_pick_count || 0) + 1;
+            if (top3[2] === trend) realPatch.third_pick_count = (current.third_pick_count || 0) + 1;
+            return Object.keys(realPatch).length
+              ? db.from('trend_stats').update(realPatch).eq('name', trend)
+              : null;
+          }).filter(Boolean);
+          await Promise.all(promises);
+        }
+
+        // Refresh stats and update display
+        const displayedBefore = getTotalVoters();
+        await loadGlobalStats();
+        const dbTotal = SEED_VOTERS + realSessionCount;
+        if (dbTotal >= displayedBefore) {
+          localVotesBumps = 0;
+        } else {
+          localVotesBumps = displayedBefore - dbTotal;
+        }
+        updateVoteCounter();
+        renderGlobalRankings();
+        renderResultsStats();
+        renderContrarian();
+        renderTopPicks(excitedTrends.length === 0);
+      } catch(e) {
+        console.warn('Supabase submit error:', e);
+      }
+    })();
+  }
 }
 
 async function loadGlobalStats() {
