@@ -89,12 +89,11 @@ function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
 function getDisplayStats() {
   if (globalStats && globalStats.length) {
+    // Total sessions = sum of all first_pick_counts (each user picks exactly one #1)
+    const totalSessions = globalStats.reduce((sum, s) => sum + (s.first_pick_count || 0), 0);
     return [...globalStats]
       .map(s => {
-        // Use per-trend vote totals for accurate percentages
         const trendTotal = (s.excited_count || 0) + (s.meh_count || 0) + (s.skip_count || 0);
-        // For first pick %, use total completed sessions (people who actually picked a #1)
-        const totalSessions = getTotalVotes();
         return {
           name: s.name,
           excitedPct: trendTotal > 0 ? Math.round(((s.excited_count || 0) / trendTotal) * 100) : 0,
