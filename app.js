@@ -22,26 +22,24 @@ const TRENDS = [
   'Payments-focused Blockchains',
 ];
 
-// Seed data: excited_rate and first_pick_rate at 180 base voters
-// Used as fallback when Supabase is unavailable
 const SEED_DATA = {
-  'Tokenized Equities':               { excited_rate: 0.74, first_pick_rate: 0.18 },
-  'Onchain Vaults':                    { excited_rate: 0.71, first_pick_rate: 0.14 },
-  'Prediction Markets':                { excited_rate: 0.69, first_pick_rate: 0.12 },
-  'Equity Perpetuals':                 { excited_rate: 0.64, first_pick_rate: 0.09 },
-  'Stablecoin-linked Cards':           { excited_rate: 0.62, first_pick_rate: 0.08 },
-  'Onchain Privacy':                   { excited_rate: 0.58, first_pick_rate: 0.07 },
-  'Stablecoin-based Cross-Border Payments': { excited_rate: 0.56, first_pick_rate: 0.06 },
-  'Tokenized Collateral in Traditional Markets': { excited_rate: 0.53, first_pick_rate: 0.05 },
-  'Stablecoin-based Neobanks':         { excited_rate: 0.51, first_pick_rate: 0.04 },
-  'Regulated ICOs':                    { excited_rate: 0.47, first_pick_rate: 0.04 },
-  'Onchain FX':                        { excited_rate: 0.44, first_pick_rate: 0.03 },
-  'Undercollateralized Lending':        { excited_rate: 0.41, first_pick_rate: 0.03 },
-  'Yield Tokenization':                { excited_rate: 0.38, first_pick_rate: 0.03 },
-  'AI Agents on Crypto Rails':         { excited_rate: 0.34, first_pick_rate: 0.02 },
-  'Payments-focused Blockchains':      { excited_rate: 0.29, first_pick_rate: 0.02 },
+  'Tokenized Equities':               { excited_rate: 0.74, cold_rate: 0.26, first_pick_rate: 0.18 },
+  'Onchain Vaults':                    { excited_rate: 0.71, cold_rate: 0.29, first_pick_rate: 0.14 },
+  'Prediction Markets':                { excited_rate: 0.69, cold_rate: 0.31, first_pick_rate: 0.12 },
+  'Equity Perpetuals':                 { excited_rate: 0.64, cold_rate: 0.36, first_pick_rate: 0.09 },
+  'Stablecoin-linked Cards':           { excited_rate: 0.62, cold_rate: 0.38, first_pick_rate: 0.08 },
+  'Onchain Privacy':                   { excited_rate: 0.58, cold_rate: 0.42, first_pick_rate: 0.07 },
+  'Stablecoin-based Cross-Border Payments': { excited_rate: 0.56, cold_rate: 0.44, first_pick_rate: 0.06 },
+  'Tokenized Collateral in Traditional Markets': { excited_rate: 0.53, cold_rate: 0.47, first_pick_rate: 0.05 },
+  'Stablecoin-based Neobanks':         { excited_rate: 0.51, cold_rate: 0.49, first_pick_rate: 0.04 },
+  'Regulated ICOs':                    { excited_rate: 0.47, cold_rate: 0.53, first_pick_rate: 0.04 },
+  'Onchain FX':                        { excited_rate: 0.44, cold_rate: 0.56, first_pick_rate: 0.03 },
+  'Undercollateralized Lending':        { excited_rate: 0.41, cold_rate: 0.59, first_pick_rate: 0.03 },
+  'Yield Tokenization':                { excited_rate: 0.38, cold_rate: 0.62, first_pick_rate: 0.03 },
+  'AI Agents on Crypto Rails':         { excited_rate: 0.34, cold_rate: 0.66, first_pick_rate: 0.02 },
+  'Payments-focused Blockchains':      { excited_rate: 0.29, cold_rate: 0.71, first_pick_rate: 0.02 },
 };
-const SEED_VOTERS = 180;
+const SEED_VOTERS = 317;
 
 // ── Supabase client ──
 let db = null;
@@ -63,10 +61,18 @@ let phase1Index = 0;
 let votes = {};
 let excitedTrends = [];
 let top3 = [];
-let pickStep = 0;
 let globalStats = null;
 let isAnimating = false;
-let contrarianData = null; // { isContrarian, trend, pct }
+let contrarianData = null;
+let rankingsUnlocked = false;
+
+// ── Vote counter ──
+let realSessionCount = 0;
+let localVotesBumps = 0;
+
+function getTotalVoters() {
+  return SEED_VOTERS + realSessionCount + localVotesBumps;
+}
 
 // ── Helpers ──
 function shuffle(arr) {
@@ -81,14 +87,6 @@ function shuffle(arr) {
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
-// Total voters: seed + real session count from Supabase
-let realSessionCount = 0;
-
-function getTotalVoters() {
-  return SEED_VOTERS + realSessionCount;
-}
-
-// Compute display stats from globalStats (which includes seed counts)
 function getDisplayStats() {
   const totalVoters = getTotalVoters();
   if (globalStats && globalStats.length) {
@@ -96,16 +94,26 @@ function getDisplayStats() {
       .map(s => ({
         name: s.name,
         excitedPct: Math.round(((s.excited_count || 0) / Math.max(1, totalVoters)) * 100),
+        coldPct: Math.round(((s.meh_count || 0) / Math.max(1, totalVoters)) * 100),
         firstPct: Math.round(((s.first_pick_count || 0) / Math.max(1, totalVoters)) * 100),
       }))
       .sort((a, b) => b.firstPct - a.firstPct);
   }
-  // Fallback to seed
   return TRENDS.map(name => ({
     name,
     excitedPct: Math.round(SEED_DATA[name].excited_rate * 100),
+    coldPct: Math.round(SEED_DATA[name].cold_rate * 100),
     firstPct: Math.round(SEED_DATA[name].first_pick_rate * 100),
   })).sort((a, b) => b.firstPct - a.firstPct);
+}
+
+function getSentimentForTrend(trendName) {
+  const stats = getDisplayStats();
+  const s = stats.find(x => x.name === trendName);
+  if (s) return { excitedPct: s.excitedPct, coldPct: s.coldPct };
+  const seed = SEED_DATA[trendName];
+  if (seed) return { excitedPct: Math.round(seed.excited_rate * 100), coldPct: Math.round(seed.cold_rate * 100) };
+  return { excitedPct: 50, coldPct: 50 };
 }
 
 function updateVoteCounter() {
@@ -113,14 +121,31 @@ function updateVoteCounter() {
   if (el) el.textContent = getTotalVoters().toLocaleString();
 }
 
+// ── Realtime polling ──
+// Poll Supabase every 8 seconds for fresh vote counts + stats
+let pollInterval = null;
+function startPolling() {
+  if (pollInterval) return;
+  pollInterval = setInterval(async () => {
+    await loadGlobalStats();
+    // Re-render rankings if on results page
+    const resultsEl = document.getElementById('results-section');
+    if (resultsEl && !resultsEl.classList.contains('hidden')) {
+      renderGlobalRankings();
+    }
+    // Re-render voting screen rankings if visible
+    renderVotingGlobalRankings();
+  }, 8000);
+}
+
 // ── Init ──
 async function init() {
   const saved = localStorage.getItem('trend_progress');
   const completed = localStorage.getItem('trend_completed');
 
-  // Load global stats first
   await loadGlobalStats();
   updateVoteCounter();
+  startPolling();
 
   if (completed) {
     try {
@@ -129,6 +154,7 @@ async function init() {
       top3 = data.top3 || [];
       excitedTrends = Object.keys(votes).filter(k => votes[k] === 'excited');
       hide('phase1');
+      rankingsUnlocked = true;
       showResults();
       return;
     } catch(e) {}
@@ -155,7 +181,7 @@ function resumeVoting() {
     excitedTrends = Object.keys(votes).filter(k => votes[k] === 'excited');
 
     if (phase1Index >= TRENDS.length) {
-      startPhase2();
+      showInterstitial();
     } else {
       show('phase1');
       showPhase1Trend();
@@ -172,8 +198,9 @@ function startFresh() {
   votes = {};
   top3 = [];
   excitedTrends = [];
-  pickStep = 0;
   contrarianData = null;
+  rankingsUnlocked = false;
+  localVotesBumps = 0;
   startPhase1();
 }
 
@@ -186,11 +213,17 @@ function startPhase1() {
   phase1Index = 0;
   votes = {};
   excitedTrends = [];
+  rankingsUnlocked = false;
   show('phase1');
   hide('phase2');
+  hide('interstitial');
   hide('results-section');
   showPhase1Trend();
   renderVotingGlobalRankings();
+  const overlay = document.getElementById('rankings-lock-overlay');
+  const list = document.getElementById('voting-global-list');
+  if (overlay) overlay.classList.remove('hidden');
+  if (list) list.classList.remove('unlocked');
 }
 
 function showPhase1Trend() {
@@ -210,6 +243,9 @@ function showPhase1Trend() {
   document.getElementById('p1-current').textContent = phase1Index + 1;
   const pct = (phase1Index / TRENDS.length) * 100;
   document.getElementById('p1-progress-fill').style.width = pct + '%';
+
+  document.getElementById('vote-buttons').classList.remove('hidden');
+  document.getElementById('sentiment-bars').classList.add('hidden');
 }
 
 function phase1Vote(choice) {
@@ -227,15 +263,63 @@ function phase1Vote(choice) {
   document.getElementById('p1-progress-fill').style.width = pct + '%';
   document.getElementById('p1-current').textContent = Math.min(phase1Index + 1, TRENDS.length);
 
+  localVotesBumps++;
+  updateVoteCounter();
+
+  showSentimentBars(trend, choice);
+}
+
+function showSentimentBars(trendName, userChoice) {
+  const buttonsEl = document.getElementById('vote-buttons');
+  const barsEl = document.getElementById('sentiment-bars');
+
+  const sentiment = getSentimentForTrend(trendName);
+  const total = sentiment.excitedPct + sentiment.coldPct;
+  const excPct = total > 0 ? Math.round((sentiment.excitedPct / total) * 100) : 50;
+  const coldPct = 100 - excPct;
+
+  barsEl.innerHTML = `
+    <div class="sentiment-bar-row">
+      <span class="sentiment-label"${userChoice === 'excited' ? ' style="font-weight:800;color:#122b42;"' : ''}>Excited 🔥</span>
+      <div class="sentiment-track">
+        <div class="sentiment-fill excited-fill" style="width:0%">
+          <span class="sentiment-pct">${excPct}%</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentiment-bar-row">
+      <span class="sentiment-label"${userChoice === 'meh' ? ' style="font-weight:800;color:#122b42;"' : ''}>Cold ❄️</span>
+      <div class="sentiment-track">
+        <div class="sentiment-fill cold-fill" style="width:0%">
+          <span class="sentiment-pct">${coldPct}%</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  buttonsEl.classList.add('hidden');
+  barsEl.classList.remove('hidden');
+
+  requestAnimationFrame(() => {
+    const fills = barsEl.querySelectorAll('.sentiment-fill');
+    if (fills[0]) fills[0].style.width = excPct + '%';
+    if (fills[1]) fills[1].style.width = coldPct + '%';
+  });
+
   setTimeout(() => {
     isAnimating = false;
     if (phase1Index >= TRENDS.length) {
       hide('phase1');
-      startPhase2();
+      rankingsUnlocked = true;
+      const overlay = document.getElementById('rankings-lock-overlay');
+      const list = document.getElementById('voting-global-list');
+      if (overlay) overlay.classList.add('hidden');
+      if (list) list.classList.add('unlocked');
+      showInterstitial();
     } else {
       showPhase1Trend();
     }
-  }, 150);
+  }, 1000);
 }
 
 function saveProgress() {
@@ -247,18 +331,68 @@ function saveProgress() {
 }
 
 // ════════════════════════════════════
+// INTERSTITIAL: Phase 1 → Phase 2
+// ════════════════════════════════════
+
+function showInterstitial() {
+  const count = excitedTrends.length;
+
+  if (count === 1) {
+    top3 = [excitedTrends[0]];
+    submitAndShowResults();
+    return;
+  }
+
+  hide('phase1');
+  hide('phase2');
+  hide('results-section');
+  show('interstitial');
+
+  const headlineEl = document.getElementById('interstitial-headline');
+  const pillsSection = document.getElementById('interstitial-pills-section');
+  const pillsEl = document.getElementById('interstitial-pills');
+
+  if (count === 0) {
+    headlineEl.textContent = "Great. Let's pick your Top 3.";
+    pillsSection.classList.add('hidden');
+  } else {
+    headlineEl.textContent = `Great! You've picked ${count} trends.`;
+    pillsSection.classList.remove('hidden');
+
+    const stats = getDisplayStats();
+    const sorted = [...excitedTrends].sort((a, b) => {
+      const aS = stats.find(s => s.name === a);
+      const bS = stats.find(s => s.name === b);
+      return (bS ? bS.excitedPct : 0) - (aS ? aS.excitedPct : 0);
+    });
+
+    pillsEl.innerHTML = sorted.map(t =>
+      `<span class="interstitial-pill">${t}</span>`
+    ).join('');
+  }
+
+  const svg = document.querySelector('.interstitial-checkmark');
+  if (svg) {
+    const clone = svg.cloneNode(true);
+    svg.parentNode.replaceChild(clone, svg);
+  }
+}
+
+function startPhase2FromInterstitial() {
+  hide('interstitial');
+  startPhase2();
+}
+
+// ════════════════════════════════════
 // PHASE 2: Top Pick Selection
 // ════════════════════════════════════
 
 function startPhase2() {
   top3 = [];
-  pickStep = 0;
   const count = excitedTrends.length;
 
-  if (count === 0) { submitAndShowResults(); return; }
-  if (count === 1) { top3 = [excitedTrends[0]]; submitAndShowResults(); return; }
-
   show('phase2');
+
   if (count === 2) {
     document.getElementById('p2-subtitle').textContent = `You're excited about ${count} trends. Pick your favorite.`;
   } else if (count === 3) {
@@ -266,17 +400,37 @@ function startPhase2() {
   } else {
     document.getElementById('p2-subtitle').textContent = `You're excited about ${count} trends. Now pick your top 3.`;
   }
+
+  updateTop3Bar();
   renderPickStep();
+}
+
+function updateTop3Bar() {
+  for (let i = 0; i < 3; i++) {
+    const valEl = document.getElementById(`top3-val-${i + 1}`);
+    if (top3[i]) {
+      valEl.textContent = top3[i];
+      valEl.classList.add('filled');
+    } else {
+      valEl.textContent = '___';
+      valEl.classList.remove('filled');
+    }
+  }
 }
 
 function renderPickStep() {
   const remaining = excitedTrends.filter(t => !top3.includes(t));
-  const prompts = ["What's your #1?", "And #2?", "And #3?"];
   const count = excitedTrends.length;
 
-  if (count === 2 && top3.length === 1) { top3.push(remaining[0]); submitAndShowResults(); return; }
-  if (count === 3 && top3.length === 2) { top3.push(remaining[0]); submitAndShowResults(); return; }
+  if (count === 2 && top3.length === 1) { top3.push(remaining[0]); updateTop3Bar(); submitAndShowResults(); return; }
+  if (count === 3 && top3.length === 2) { top3.push(remaining[0]); updateTop3Bar(); submitAndShowResults(); return; }
   if (top3.length >= 3) { submitAndShowResults(); return; }
+
+  const prompts = [
+    "Who's your winner? What's the #1 trend you're most excited about?",
+    "Great. Now your #2.",
+    "Final one. Your #3.",
+  ];
 
   document.getElementById('p2-prompt').textContent = prompts[top3.length] || `Pick #${top3.length + 1}`;
 
@@ -294,6 +448,7 @@ function pickTrend(trend) {
   cards.forEach(c => { if (c.textContent === trend) c.classList.add('selected'); });
 
   top3.push(trend);
+  updateTop3Bar();
 
   setTimeout(() => {
     isAnimating = false;
@@ -313,13 +468,13 @@ function pickTrend(trend) {
 async function submitAndShowResults() {
   hide('phase1');
   hide('phase2');
+  hide('interstitial');
 
   localStorage.removeItem('trend_progress');
   localStorage.setItem('trend_completed', JSON.stringify({ votes, top3 }));
 
   if (db) {
     try {
-      // Insert session first
       await db.from('voter_sessions').insert({
         session_id: SESSION_ID,
         votes,
@@ -327,11 +482,19 @@ async function submitAndShowResults() {
         excited_count: excitedTrends.length,
       });
 
-      // Immediately increment local counter so UI updates fast
-      realSessionCount++;
+      // Remember the displayed total before DB refresh
+      const displayedBefore = getTotalVoters();
+      await loadGlobalStats();
+      // Only reset bumps if DB total meets/exceeds what user saw
+      const dbTotal = SEED_VOTERS + realSessionCount;
+      if (dbTotal >= displayedBefore) {
+        localVotesBumps = 0;
+      } else {
+        // DB hasn't caught up yet — keep bumps so counter doesn't drop
+        localVotesBumps = displayedBefore - dbTotal;
+      }
       updateVoteCounter();
 
-      // Update trend stats
       for (const trend of TRENDS) {
         const vote = votes[trend];
         if (!vote) continue;
@@ -350,7 +513,6 @@ async function submitAndShowResults() {
         }
       }
 
-      // Reload from DB for accurate global state
       await loadGlobalStats();
       updateVoteCounter();
       renderVotingGlobalRankings();
@@ -368,12 +530,12 @@ async function loadGlobalStats() {
   try {
     const { data } = await db.from('trend_stats').select('*');
     if (data && data.length) globalStats = data;
-  } catch(e) {}
-  // Count real sessions (not seed data)
+  } catch(e) { console.warn('Failed to load trend_stats:', e); }
   try {
-    const { count } = await db.from('voter_sessions').select('*', { count: 'exact', head: true });
-    realSessionCount = count || 0;
-  } catch(e) {}
+    const { count, error } = await db.from('voter_sessions').select('*', { count: 'exact', head: true });
+    if (!error && count != null) realSessionCount = count;
+  } catch(e) { console.warn('Failed to load voter_sessions count:', e); }
+  updateVoteCounter();
 }
 
 // ════════════════════════════════════
@@ -402,13 +564,18 @@ function showResults() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const isSkeptic = excitedTrends.length === 0;
+  const totalVoters = getTotalVoters();
+
+  // Update the results vote counter
+  const resultsVoteEl = document.getElementById('results-vote-count');
+  if (resultsVoteEl) resultsVoteEl.textContent = totalVoters.toLocaleString();
 
   if (isSkeptic) {
     document.getElementById('results-headline').textContent = "You're a skeptic.";
     document.getElementById('results-subtext').textContent =
       "You're not excited about any 2026 trend.";
   } else {
-    document.getElementById('results-headline').textContent = 'Your 2026 Top Trends';
+    document.getElementById('results-headline').textContent = 'Your 2026 Outlook';
     document.getElementById('results-subtext').textContent = '';
   }
 
@@ -416,6 +583,7 @@ function showResults() {
   renderContrarian();
   renderAlsoExcited();
   renderGlobalRankings();
+  renderResultsStats();
 }
 
 function renderTopPicks(isSkeptic) {
@@ -427,12 +595,47 @@ function renderTopPicks(isSkeptic) {
     </div>`;
     return;
   }
-  el.innerHTML = top3.map((trend, i) =>
-    `<div class="top-pick-item rank-${i + 1}">
+
+  const stats = getDisplayStats();
+  el.innerHTML = top3.map((trend, i) => {
+    const s = stats.find(x => x.name === trend);
+    const excPct = s ? s.excitedPct : 0;
+    const firstPct = s ? s.firstPct : 0;
+    const rankInGlobal = s ? stats.indexOf(s) + 1 : '—';
+    return `<div class="top-pick-item rank-${i + 1}">
       <span class="top-pick-rank">#${i + 1}</span>
-      <span class="top-pick-name">${trend}</span>
-    </div>`
-  ).join('');
+      <div class="top-pick-info">
+        <span class="top-pick-name">${trend}</span>
+        <span class="top-pick-meta">${excPct}% excited · ${firstPct}% picked #1 · Global rank #${rankInGlobal}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderResultsStats() {
+  const totalVoters = getTotalVoters();
+  const stats = getDisplayStats();
+  const global1 = stats[0];
+
+  const el = document.getElementById('results-stats-bar');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="results-stat-item">
+      <span class="results-stat-value" id="results-vote-count">${totalVoters.toLocaleString()}</span>
+      <span class="results-stat-label">votes cast</span>
+    </div>
+    <div class="results-stat-divider"></div>
+    <div class="results-stat-item">
+      <span class="results-stat-value">15</span>
+      <span class="results-stat-label">trends rated</span>
+    </div>
+    <div class="results-stat-divider"></div>
+    <div class="results-stat-item">
+      <span class="results-stat-value">${global1 ? global1.name : '—'}</span>
+      <span class="results-stat-label">global #1 pick</span>
+    </div>
+  `;
 }
 
 function renderContrarian() {
@@ -443,7 +646,6 @@ function renderContrarian() {
   const pickStat = stats.find(s => s.name === userPick);
   const firstPct = pickStat ? pickStat.firstPct : 0;
 
-  // Find global #1
   const global1 = stats[0];
   const isAligned = (userPick === global1.name) || firstPct >= 15;
 
@@ -454,17 +656,17 @@ function renderContrarian() {
     contrarianData = { isContrarian: false, trend: userPick, pct: firstPct };
     if (userPick === global1.name) {
       el.className = 'contrarian-callout aligned-style';
-      el.innerHTML = `<span class="contrarian-label aligned-color">You're with the crowd</span>
+      el.innerHTML = `<span class="contrarian-label aligned-color">Consensus pick</span>
         Your #1, <strong>${userPick}</strong>, is the global #1 too.`;
     } else {
       el.className = 'contrarian-callout aligned-style';
-      el.innerHTML = `<span class="contrarian-label aligned-color">You're with the crowd</span>
+      el.innerHTML = `<span class="contrarian-label aligned-color">Consensus pick</span>
         Your #1, <strong>${userPick}</strong>, is a popular pick — <strong>${firstPct}%</strong> of voters agree.`;
     }
   } else {
     contrarianData = { isContrarian: true, trend: userPick, pct: firstPct };
     el.className = 'contrarian-callout contrarian-style';
-    el.innerHTML = `<span class="contrarian-label contrarian-color">Your contrarian take</span>
+    el.innerHTML = `<span class="contrarian-label contrarian-color">Contrarian take</span>
       You picked <strong>${userPick}</strong> as your #1 — only <strong>${firstPct}%</strong> of voters agree.`;
   }
 }
@@ -482,15 +684,23 @@ function renderGlobalRankings() {
   const stats = getDisplayStats();
   const totalVoters = getTotalVoters();
 
-  el.innerHTML = stats.map((s, i) => {
-    const isUserPick = top3.includes(s.name);
-    return `<div class="global-row${isUserPick ? ' user-pick' : ''}">
-      <span class="global-rank">#${i + 1}</span>
-      <span class="global-name">${s.name}</span>
-      <span class="global-detail"><span class="global-stat-value">${s.firstPct}%</span> picked first · <span class="global-stat-value">${s.excitedPct}%</span> excited</span>
-      ${isUserPick ? '<span class="user-check">✓</span>' : ''}
-    </div>`;
-  }).join('');
+  el.innerHTML = `<div class="rankings-table">
+    <div class="rankings-header-row">
+      <span class="rh-rank">Rank</span>
+      <span class="rh-name">Trend</span>
+      <span class="rh-stat">#1 picks</span>
+      <span class="rh-stat">Excited</span>
+    </div>
+    ${stats.map((s, i) => {
+      const isUserPick = top3.includes(s.name);
+      return `<div class="global-row${isUserPick ? ' user-pick' : ''}">
+        <span class="global-rank">#${i + 1}</span>
+        <span class="global-name">${s.name}${isUserPick ? ' <span class="user-badge">You</span>' : ''}</span>
+        <span class="global-stat-cell">${s.firstPct}%</span>
+        <span class="global-stat-cell">${s.excitedPct}%</span>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 // ════════════════════════════════════
@@ -503,8 +713,9 @@ function voteAgain() {
   votes = {};
   top3 = [];
   excitedTrends = [];
-  pickStep = 0;
   contrarianData = null;
+  rankingsUnlocked = false;
+  localVotesBumps = 0;
   hide('results-section');
   startPhase1();
   loadGlobalStats().then(updateVoteCounter);
@@ -519,7 +730,7 @@ function fireConfetti() {
   const ctx = canvas.getContext('2d');
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  const colors = ['#7c3aed', '#a78bfa', '#059669', '#34d399', '#ea580c', '#fb923c', '#3b82f6', '#f472b6'];
+  const colors = ['#122b42', '#3a6b9f', '#059669', '#34d399', '#ea580c', '#fb923c', '#3b82f6', '#c4b5a0'];
   const pieces = [];
   for (let i = 0; i < 80; i++) {
     pieces.push({
@@ -552,29 +763,38 @@ function fireConfetti() {
 // SHARE & DOWNLOAD
 // ════════════════════════════════════
 
-function shareOnX() {
+function getShareText() {
   const pick1 = top3[0];
-  let text;
+  const totalVoters = getTotalVoters();
   if (!pick1) {
-    text = "I'm not excited about any 2026 digital asset trend. Call me a skeptic.";
-  } else if (contrarianData && contrarianData.isContrarian) {
-    text = `My 2026 digital asset outlook:\n\n#1 ${pick1}\n\nOnly ${contrarianData.pct}% agree with my top pick 👀\n\nWhat's yours? ${DOMAIN}`;
-  } else {
-    text = `My 2026 digital asset outlook:\n\n#1 ${pick1}\n\nI'm with the consensus on this one.\n\nWhat's yours? ${DOMAIN}`;
+    return `I just voted on the Top Trends in Digital Assets 2026 — and I'm not excited about any of them. Call me a skeptic.\n\nWhat's your take?\n\nhttps://${DOMAIN}`;
   }
+  const top3Text = top3.map((t, i) => `#${i + 1} ${t}`).join('\n');
+  if (contrarianData && contrarianData.isContrarian) {
+    return `I just voted on the Top Trends in Digital Assets 2026.\n\nMy picks:\n${top3Text}\n\nOnly ${contrarianData.pct}% agree with my #1 pick. ${totalVoters.toLocaleString()} votes and counting.\n\nWhat are yours?\nhttps://${DOMAIN}`;
+  }
+  return `I just voted on the Top Trends in Digital Assets 2026.\n\nMy picks:\n${top3Text}\n\n${totalVoters.toLocaleString()} votes and counting.\n\nWhat are yours?\nhttps://${DOMAIN}`;
+}
+
+function shareOnX() {
+  const text = getShareText();
   window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
 }
 
 function shareOnLinkedIn() {
-  // LinkedIn share-offsite only supports url param; text goes in og tags
-  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://' + DOMAIN)}`, '_blank');
+  // LinkedIn share URL supports url + summary params
+  const url = `https://${DOMAIN}`;
+  const text = getShareText();
+  // LinkedIn's sharing API is limited — use the shareArticle endpoint with summary
+  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}&summary=${encodeURIComponent(text)}`, '_blank');
 }
 
 function copyLink() {
-  navigator.clipboard.writeText('https://' + DOMAIN).then(() => {
+  const text = getShareText();
+  navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('.share-copy');
     btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+    setTimeout(() => { btn.textContent = 'Copy text'; }, 2000);
   });
 }
 
@@ -582,71 +802,106 @@ async function downloadScorecard() {
   if (!window.html2canvas) return;
 
   const isSkeptic = excitedTrends.length === 0;
+  const stats = getDisplayStats();
+  const totalVoters = getTotalVoters();
+  const global1 = stats[0];
+
   const offscreen = document.createElement('div');
   offscreen.className = 'scorecard-offscreen';
-
-  // Light gradient background
-  offscreen.style.background = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #f1f3f5 100%)';
   offscreen.style.position = 'relative';
 
-  let topContent = '';
+  // Build top 3 section
+  let picksHTML = '';
   if (isSkeptic) {
-    topContent = `<div style="padding:20px 28px;background:#f3f4f6;border-radius:12px;margin-bottom:16px;">
-      <p style="font-size:22px;font-weight:700;color:#1a1a1a;">I'm not excited about any 2026 trend. Call me a skeptic.</p>
+    picksHTML = `<div style="padding:24px 32px;background:rgba(18,43,66,0.04);border-radius:12px;border:1px solid rgba(18,43,66,0.08);">
+      <p style="font-size:20px;font-weight:700;color:#1a1a1a;">Not excited about any 2026 trend.</p>
+      <p style="font-size:14px;color:#666;margin-top:4px;">Call me a skeptic.</p>
     </div>`;
   } else {
-    // #1 with green bg
-    topContent = `<div style="padding:20px 28px;background:#ecfdf5;border-left:5px solid #059669;border-radius:12px;margin-bottom:12px;">
-      <p style="font-size:14px;font-weight:600;color:#059669;margin-bottom:4px;">#1</p>
-      <p style="font-size:26px;font-weight:800;color:#1a1a1a;">${top3[0]}</p>
-    </div>`;
-    if (top3[1]) {
-      topContent += `<div style="padding:14px 24px;background:#ffffff;border:1px solid #e5e5e5;border-radius:10px;margin-bottom:8px;display:inline-block;margin-right:8px;">
-        <span style="font-size:13px;font-weight:600;color:#7c3aed;">#2</span>
-        <span style="font-size:16px;font-weight:600;color:#1a1a1a;margin-left:8px;">${top3[1]}</span>
+    const rankColors = ['#122b42', '#059669', '#ea580c'];
+    const rankBgs = ['rgba(18,43,66,0.06)', 'rgba(5,150,105,0.06)', 'rgba(234,88,12,0.06)'];
+    picksHTML = top3.map((trend, i) => {
+      const s = stats.find(x => x.name === trend);
+      const excPct = s ? s.excitedPct : 0;
+      const firstPct = s ? s.firstPct : 0;
+      const globalRank = s ? stats.indexOf(s) + 1 : '—';
+      return `<div style="display:flex;align-items:center;gap:16px;padding:${i === 0 ? '20px 24px' : '14px 24px'};background:${rankBgs[i]};border-left:4px solid ${rankColors[i]};border-radius:10px;margin-bottom:${i < 2 ? '8' : '0'}px;">
+        <span style="font-size:${i === 0 ? '32' : '22'}px;font-weight:800;color:${rankColors[i]};min-width:36px;">#${i + 1}</span>
+        <div style="flex:1;">
+          <p style="font-size:${i === 0 ? '22' : '16'}px;font-weight:700;color:#1a1a1a;margin-bottom:2px;">${trend}</p>
+          <p style="font-size:12px;color:#888;">${excPct}% excited · ${firstPct}% picked #1 · Global #${globalRank}</p>
+        </div>
       </div>`;
-    }
-    if (top3[2]) {
-      topContent += `<div style="padding:14px 24px;background:#ffffff;border:1px solid #e5e5e5;border-radius:10px;margin-bottom:8px;display:inline-block;">
-        <span style="font-size:13px;font-weight:600;color:#ea580c;">#3</span>
-        <span style="font-size:16px;font-weight:600;color:#1a1a1a;margin-left:8px;">${top3[2]}</span>
-      </div>`;
-    }
+    }).join('');
   }
 
-  // Contrarian / aligned box
-  let contrarianBox = '';
+  // Contrarian badge
+  let contrarianHTML = '';
   if (contrarianData) {
     if (contrarianData.isContrarian) {
-      contrarianBox = `<div style="margin-top:20px;padding:16px 24px;background:#fef3c7;border:2px solid #fbbf24;border-radius:10px;">
-        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b45309;margin-bottom:4px;">My contrarian take</p>
-        <p style="font-size:15px;color:#1a1a1a;">Only <strong>${contrarianData.pct}%</strong> agree with my #1</p>
+      contrarianHTML = `<div style="margin-top:16px;padding:12px 20px;background:#fef3c7;border:2px solid #fbbf24;border-radius:10px;">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#b45309;margin-bottom:3px;">Contrarian take</p>
+        <p style="font-size:14px;color:#1a1a1a;">Only <strong>${contrarianData.pct}%</strong> agree with my #1 pick</p>
       </div>`;
     } else {
-      contrarianBox = `<div style="margin-top:20px;padding:16px 24px;background:#ecfdf5;border:2px solid rgba(5,150,105,0.3);border-radius:10px;">
-        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#059669;margin-bottom:4px;">I'm with the crowd</p>
-        <p style="font-size:15px;color:#1a1a1a;">${contrarianData.pct}% share my #1</p>
+      contrarianHTML = `<div style="margin-top:16px;padding:12px 20px;background:#ecfdf5;border:2px solid rgba(5,150,105,0.3);border-radius:10px;">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#059669;margin-bottom:3px;">Consensus pick</p>
+        <p style="font-size:14px;color:#1a1a1a;"><strong>${contrarianData.pct}%</strong> share my #1 pick</p>
       </div>`;
     }
   }
 
   // Also excited
   const also = excitedTrends.filter(t => !top3.includes(t));
-  let alsoContent = '';
+  let alsoHTML = '';
   if (also.length) {
-    alsoContent = `<p style="margin-top:16px;font-size:13px;color:#999;">Also excited: ${also.join(', ')}</p>`;
+    alsoHTML = `<div style="margin-top:20px;">
+      <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#999;margin-bottom:8px;">Also excited about</p>
+      <p style="font-size:13px;color:#666;line-height:1.6;">${also.join(' · ')}</p>
+    </div>`;
   }
 
+  // Global top 5 mini leaderboard
+  const top5 = stats.slice(0, 5);
+  let leaderHTML = `<div style="margin-top:20px;padding:16px 20px;background:rgba(18,43,66,0.03);border-radius:10px;border:1px solid rgba(18,43,66,0.06);">
+    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#999;margin-bottom:10px;">Global Top 5</p>
+    ${top5.map((s, i) => {
+      const isMe = top3.includes(s.name);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;${i < 4 ? 'border-bottom:1px solid rgba(18,43,66,0.06);' : ''}">
+        <span style="font-size:12px;font-weight:700;color:#999;min-width:24px;">#${i + 1}</span>
+        <span style="flex:1;font-size:13px;font-weight:${isMe ? '700' : '500'};color:${isMe ? '#122b42' : '#1a1a1a'};">${s.name}${isMe ? ' ←' : ''}</span>
+        <span style="font-size:11px;color:#999;">${s.firstPct}%</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+
   offscreen.innerHTML = `
-    <div style="padding:56px 64px;height:100%;position:relative;">
-      <p style="font-size:13px;color:#999;margin-bottom:6px;">My 2026 Digital Asset Outlook</p>
-      <h2 style="font-size:28px;font-weight:800;letter-spacing:-0.03em;color:#1a1a1a;margin-bottom:28px;">Top Trends in Digital Assets 2026</h2>
-      ${topContent}
-      ${contrarianBox}
-      ${alsoContent}
-      <div style="position:absolute;bottom:40px;left:64px;right:64px;display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:14px;font-weight:600;color:#1a1a1a;">${DOMAIN}</span>
-        <span style="font-size:12px;color:#bbb;">built by @maximilianvargas</span>
+    <div style="padding:44px 56px;height:100%;position:relative;background:linear-gradient(145deg, #fafbfc 0%, #f0f2f5 40%, #e8ecf0 100%);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;">
+        <div>
+          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#999;">My 2026 Digital Asset Outlook</p>
+          <h2 style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#122b42;margin-top:4px;">Top Trends in Digital Assets</h2>
+        </div>
+        <div style="text-align:right;">
+          <p style="font-size:24px;font-weight:800;color:#122b42;">${totalVoters.toLocaleString()}</p>
+          <p style="font-size:11px;color:#999;">votes cast</p>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:24px;">
+        <div style="flex:1.2;">
+          ${picksHTML}
+          ${contrarianHTML}
+          ${alsoHTML}
+        </div>
+        <div style="flex:0.8;">
+          ${leaderHTML}
+        </div>
+      </div>
+
+      <div style="position:absolute;bottom:32px;left:56px;right:56px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid rgba(18,43,66,0.08);">
+        <span style="font-size:13px;font-weight:700;color:#122b42;">${DOMAIN}</span>
+        <span style="font-size:11px;color:#bbb;">Vote now — see how you compare</span>
       </div>
     </div>
   `;

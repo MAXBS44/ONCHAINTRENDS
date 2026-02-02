@@ -5,30 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Top Trends in Digital Assets 2026</title>
   <meta property="og:title" content="Top Trends in Digital Assets 2026">
-  <meta property="og:description" content="What excites you for 2026? Vote on the top digital asset trends and see how you compare.">
+  <meta property="og:description" content="Which trends get you fired up for 2026? Vote and see how you compare.">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Top Trends in Digital Assets 2026">
-  <meta name="twitter:description" content="What excites you for 2026? Vote on the top digital asset trends and see how you compare.">
+  <meta name="twitter:description" content="Which trends get you fired up for 2026? Vote and see how you compare.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Webinar Banner -->
-  <div class="webinar-banner">
-    <a href="https://luma.com/s23ich2u" target="_blank" rel="noopener">
-      Join our free webinar: <strong>Onchain Capital Markets: Vaults, ETFs, and Tokenized Funds</strong> — February 19 → Register now
-    </a>
-  </div>
-
   <!-- Confetti canvas -->
   <canvas id="confetti-canvas"></canvas>
 
-  <!-- Live vote counter (always visible) -->
+  <!-- Stats bar (topmost) -->
   <div class="live-counter">
-    <span><strong id="total-votes">180</strong> votes cast · <strong>15</strong> trends</span>
+    <span><strong id="total-votes">317</strong> votes cast · <strong>15</strong> trends</span>
+  </div>
+
+  <!-- Webinar Banner (below stats) -->
+  <div class="webinar-banner">
+    <a href="https://luma.com/s23ich2u" target="_blank" rel="noopener">
+      <span class="banner-text">Join our free webinar: <strong>Onchain Capital Markets: Vaults, ETFs, and Tokenized Funds</strong> — February 19</span>
+      <span class="banner-logos">
+        <span class="banner-logos-label">Featuring speakers from</span>
+        <img src="Logos/Centrifuge.svg" alt="Centrifuge" class="banner-logo">
+        <img src="Logos/Steakhouse Financial.svg" alt="Steakhouse Financial" class="banner-logo">
+        <img src="Logos/WisdomTree.svg" alt="WisdomTree" class="banner-logo">
+      </span>
+    </a>
   </div>
 
   <div class="container">
@@ -37,7 +43,7 @@
     <section id="phase1" class="phase-section">
       <header class="header">
         <h1>Top Trends in Digital Assets 2026</h1>
-        <p class="subtitle">What excites you for 2026?</p>
+        <p class="subtitle">Which trends get you fired up for 2026?</p>
       </header>
 
       <div class="phase1-card-area">
@@ -46,10 +52,14 @@
         </div>
       </div>
 
-      <div class="vote-buttons">
-        <button class="vote-btn excited" onclick="phase1Vote('excited')">Excited 🔥</button>
-        <button class="vote-btn meh" onclick="phase1Vote('meh')">Meh 😐</button>
-        <button class="vote-btn skip" onclick="phase1Vote('skip')">Skip ⏭️</button>
+      <!-- Vote buttons + sentiment feedback area -->
+      <div id="vote-area">
+        <div class="vote-buttons" id="vote-buttons">
+          <button class="vote-btn excited" onclick="phase1Vote('excited')">Excited 🔥</button>
+          <button class="vote-btn cold" onclick="phase1Vote('meh')">Leaves me cold ❄️</button>
+          <button class="vote-btn skip" onclick="phase1Vote('skip')">Skip</button>
+        </div>
+        <div class="sentiment-bars hidden" id="sentiment-bars"></div>
       </div>
 
       <div class="progress-row">
@@ -59,19 +69,59 @@
         </div>
       </div>
 
-      <!-- Global rankings shown below voting -->
+      <!-- Global rankings: locked until voted -->
       <div id="voting-global-rankings" class="voting-global-rankings">
         <h4 class="voting-rankings-heading">Global Rankings</h4>
-        <div id="voting-global-list"></div>
+        <div class="rankings-lock-wrapper">
+          <div id="voting-global-list" class="rankings-blurred"></div>
+          <div id="rankings-lock-overlay" class="rankings-lock-overlay">
+            <div class="lock-card">
+              <h3 class="lock-title">See what the crowd thinks</h3>
+              <p class="lock-body">Cast your vote to unlock the live global ranking.</p>
+              <p class="lock-subtext">Takes 60 seconds.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ INTERSTITIAL: Phase 1 → Phase 2 ═══ -->
+    <section id="interstitial" class="phase-section hidden">
+      <div class="interstitial-content">
+        <!-- Animated checkmark SVG -->
+        <svg class="interstitial-checkmark" viewBox="0 0 52 52" width="52" height="52">
+          <circle class="checkmark-circle" cx="26" cy="26" r="24" fill="none" stroke="#122b42" stroke-width="2"/>
+          <path class="checkmark-path" fill="none" stroke="#122b42" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M14 27l8 8 16-16"/>
+        </svg>
+
+        <h1 class="interstitial-headline" id="interstitial-headline">Great! You've picked 0 trends.</h1>
+        <p class="interstitial-subheadline">Now pick the 3 trends you'd actually bet on.</p>
+
+        <!-- Excited trends pills -->
+        <div id="interstitial-pills-section" class="interstitial-pills-section">
+          <p class="interstitial-pills-label">Your excited list</p>
+          <div class="interstitial-pills" id="interstitial-pills"></div>
+        </div>
+
+        <button class="cta-btn cta-btn-large" onclick="startPhase2FromInterstitial()">Pick my Top 3 →</button>
       </div>
     </section>
 
     <!-- ═══ PHASE 2: Top Pick Selection ═══ -->
     <section id="phase2" class="phase-section hidden">
       <header class="header">
-        <h1>Top Trends in Digital Assets 2026</h1>
+        <h1>Pick your Top 3</h1>
         <p class="subtitle" id="p2-subtitle"></p>
       </header>
+
+      <!-- Persistent Top 3 bar -->
+      <div class="top3-bar" id="top3-bar">
+        <div class="top3-slot" id="top3-slot-1"><span class="top3-label">#1:</span> <span class="top3-value" id="top3-val-1">___</span></div>
+        <div class="top3-divider">|</div>
+        <div class="top3-slot" id="top3-slot-2"><span class="top3-label">#2:</span> <span class="top3-value" id="top3-val-2">___</span></div>
+        <div class="top3-divider">|</div>
+        <div class="top3-slot" id="top3-slot-3"><span class="top3-label">#3:</span> <span class="top3-value" id="top3-val-3">___</span></div>
+      </div>
 
       <p class="pick-prompt" id="p2-prompt"></p>
 
@@ -80,44 +130,47 @@
 
     <!-- ═══ RESULTS ═══ -->
     <section id="results-section" class="phase-section hidden">
-      <header class="header">
-        <h1 id="results-headline">Your 2026 Top Trends</h1>
-        <p class="subtitle" id="results-subtext"></p>
-      </header>
+      <div class="results-hero">
+        <header class="header">
+          <h1 id="results-headline">Your 2026 Outlook</h1>
+          <p class="subtitle" id="results-subtext"></p>
+        </header>
 
-      <!-- Section 1: Your Top 3 -->
-      <div id="top-picks-section">
-        <h3 class="section-heading">Your Top 3</h3>
-        <div id="top-picks-list"></div>
+        <!-- Stats bar -->
+        <div class="results-stats-bar" id="results-stats-bar"></div>
       </div>
 
-      <!-- Section 2: Your contrarian take -->
-      <div id="contrarian-section" class="hidden">
-        <div class="contrarian-callout" id="contrarian-callout"></div>
-      </div>
+      <div class="results-body">
+        <div id="top-picks-section">
+          <h3 class="section-heading">Your Top 3</h3>
+          <div id="top-picks-list"></div>
+        </div>
 
-      <!-- Section 3: Also excited about -->
-      <div id="also-excited-section" class="hidden">
-        <h3 class="section-heading">Also excited about</h3>
-        <div id="also-excited-list"></div>
-      </div>
+        <div id="contrarian-section" class="hidden">
+          <div class="contrarian-callout" id="contrarian-callout"></div>
+        </div>
 
-      <!-- Section 4: Global Rankings -->
-      <h3 class="section-heading">Global Rankings</h3>
-      <div id="global-rankings"></div>
+        <div id="also-excited-section" class="hidden">
+          <h3 class="section-heading">Also excited about</h3>
+          <div id="also-excited-list"></div>
+        </div>
 
-      <!-- Section 5: Actions -->
-      <div class="actions-row">
-        <button class="download-btn" onclick="downloadScorecard()">Download Scorecard</button>
-        <button class="share-btn" onclick="shareOnLinkedIn()">Share on LinkedIn</button>
-        <button class="share-btn" onclick="shareOnX()">Share on X</button>
-        <button class="share-btn share-copy" onclick="copyLink()">Copy link</button>
-      </div>
+        <div class="results-divider"></div>
 
-      <!-- Section 6: Vote Again -->
-      <div class="vote-again-card">
-        <p class="vote-again-copy">Rankings update live. Share yours.</p>
-        <button class="vote-again-btn" onclick="voteAgain()">Vote again →</button>
+        <h3 class="section-heading">Global Rankings <span class="live-dot"></span></h3>
+        <div id="global-rankings"></div>
+
+        <div class="actions-row">
+          <button class="download-btn" onclick="downloadScorecard()">Download Scorecard</button>
+          <button class="share-btn" onclick="shareOnLinkedIn()">Share on LinkedIn</button>
+          <button class="share-btn" onclick="shareOnX()">Share on X</button>
+          <button class="share-btn share-copy" onclick="copyLink()">Copy text</button>
+        </div>
+
+        <div class="vote-again-card">
+          <p class="vote-again-copy">Rankings update live. Share yours.</p>
+          <button class="vote-again-btn" onclick="voteAgain()">Vote again →</button>
+        </div>
       </div>
     </section>
 
@@ -126,7 +179,7 @@
       <p>Looks like you were in the middle of voting.</p>
       <div class="resume-buttons">
         <button class="vote-btn excited" onclick="resumeVoting()">Continue where I left off</button>
-        <button class="vote-btn meh" onclick="startFresh()">Start fresh</button>
+        <button class="vote-btn cold" onclick="startFresh()">Start fresh</button>
       </div>
     </div>
 
