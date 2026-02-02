@@ -39,7 +39,7 @@ const SEED_DATA = {
   'AI Agents on Crypto Rails':         { excited_rate: 0.34, cold_rate: 0.66, first_pick_rate: 0.02 },
   'Payments-focused Blockchains':      { excited_rate: 0.29, cold_rate: 0.71, first_pick_rate: 0.02 },
 };
-const SEED_VOTES = 324 * 15;  // 4860 seed votes (324 users × 15 trends each)
+const SEED_VOTES = 27 * 15;  // 405 seed votes (27 users × 15 trends each)
 
 // ── Supabase client ──
 let db = null;
