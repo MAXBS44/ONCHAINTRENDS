@@ -88,15 +88,20 @@ function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
 function getDisplayStats() {
-  const totalVoters = getTotalVoters();
   if (globalStats && globalStats.length) {
     return [...globalStats]
-      .map(s => ({
-        name: s.name,
-        excitedPct: Math.round(((s.excited_count || 0) / Math.max(1, totalVoters)) * 100),
-        coldPct: Math.round(((s.meh_count || 0) / Math.max(1, totalVoters)) * 100),
-        firstPct: Math.round(((s.first_pick_count || 0) / Math.max(1, totalVoters)) * 100),
-      }))
+      .map(s => {
+        // Use per-trend vote totals for accurate percentages
+        const trendTotal = (s.excited_count || 0) + (s.meh_count || 0) + (s.skip_count || 0);
+        // For first pick %, use total completed sessions (people who actually picked a #1)
+        const totalSessions = getTotalVoters();
+        return {
+          name: s.name,
+          excitedPct: trendTotal > 0 ? Math.round(((s.excited_count || 0) / trendTotal) * 100) : 0,
+          coldPct: trendTotal > 0 ? Math.round(((s.meh_count || 0) / trendTotal) * 100) : 0,
+          firstPct: totalSessions > 0 ? Math.round(((s.first_pick_count || 0) / totalSessions) * 100) : 0,
+        };
+      })
       .sort((a, b) => b.firstPct - a.firstPct);
   }
   return TRENDS.map(name => ({
@@ -526,15 +531,23 @@ async function submitAndShowResults() {
 }
 
 async function loadGlobalStats() {
-  if (!db) return;
+  if (!db) { console.warn('[data] No Supabase connection'); return; }
   try {
-    const { data } = await db.from('trend_stats').select('*');
-    if (data && data.length) globalStats = data;
-  } catch(e) { console.warn('Failed to load trend_stats:', e); }
+    const { data, error } = await db.from('trend_stats').select('*');
+    if (error) { console.warn('[data] trend_stats error:', error.message); }
+    else if (data && data.length) {
+      globalStats = data;
+      console.log('[data] trend_stats loaded:', data.length, 'trends');
+    }
+  } catch(e) { console.warn('[data] trend_stats exception:', e); }
   try {
     const { count, error } = await db.from('voter_sessions').select('*', { count: 'exact', head: true });
-    if (!error && count != null) realSessionCount = count;
-  } catch(e) { console.warn('Failed to load voter_sessions count:', e); }
+    if (error) { console.warn('[data] voter_sessions count error:', error.message); }
+    else if (count != null) {
+      realSessionCount = count;
+      console.log('[data] voter_sessions count:', count, '→ total displayed:', getTotalVoters());
+    }
+  } catch(e) { console.warn('[data] voter_sessions exception:', e); }
   updateVoteCounter();
 }
 
@@ -782,11 +795,9 @@ function shareOnX() {
 }
 
 function shareOnLinkedIn() {
-  // LinkedIn share URL supports url + summary params
+  // LinkedIn share only supports the url param — text comes from OG tags
   const url = `https://${DOMAIN}`;
-  const text = getShareText();
-  // LinkedIn's sharing API is limited — use the shareArticle endpoint with summary
-  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}&summary=${encodeURIComponent(text)}`, '_blank');
+  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank');
 }
 
 function copyLink() {

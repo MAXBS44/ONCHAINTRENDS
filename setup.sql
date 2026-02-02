@@ -1,11 +1,10 @@
 -- Run this in your Supabase SQL Editor
--- Updated: 15 trends with seed data starting at 180 voters
+-- Updated: 15 trends with seed data based on 317 base voters
+-- IMPORTANT: Only run this ONCE. If tables already exist with real votes, DO NOT re-run.
 
--- Drop old tables
-drop table if exists votes cascade;
-drop table if exists trends cascade;
-drop table if exists voter_sessions cascade;
-drop table if exists trend_stats cascade;
+-- Drop old tables (CAUTION: destroys existing data)
+-- drop table if exists voter_sessions cascade;
+-- drop table if exists trend_stats cascade;
 
 -- Voter sessions: one row per completed vote
 create table if not exists voter_sessions (
@@ -34,7 +33,7 @@ create table if not exists trend_stats (
 alter table voter_sessions enable row level security;
 alter table trend_stats enable row level security;
 
--- Policies
+-- Policies (safe: only creates if not exists)
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='voter_sessions' and policyname='anon_insert_sessions') then
     create policy "anon_insert_sessions" on voter_sessions for insert with check (true);
@@ -53,23 +52,34 @@ do $$ begin
   end if;
 end $$;
 
--- Seed 15 trends with initial data (180 base voters)
--- Counts are: excited = rate * 180, first_pick = rate * 180
--- total_voters = 180 for all
+-- ══════════════════════════════════════════
+-- UPDATE SEED DATA to 317 base voters
+-- This uses ON CONFLICT to update existing rows or insert new ones
+-- Safe to run even if rows already exist from previous seed
+-- ══════════════════════════════════════════
+-- Rates: excited_count = excited_rate * 317, meh_count = cold_rate * 317
+-- skip = 317 - excited - meh (remainder)
+-- first_pick_count = first_pick_rate * 317
+
 insert into trend_stats (name, excited_count, meh_count, skip_count, first_pick_count, total_voters) values
-  ('Tokenized Equities',               133, 32, 15, 32, 180),
-  ('Onchain Vaults',                    128, 36, 16, 25, 180),
-  ('Prediction Markets',                124, 38, 18, 22, 180),
-  ('Equity Perpetuals',                 115, 43, 22, 16, 180),
-  ('Stablecoin-linked Cards',           112, 45, 23, 14, 180),
-  ('Onchain Privacy',                   104, 49, 27, 13, 180),
-  ('Stablecoin-based Cross-Border Payments', 101, 51, 28, 11, 180),
-  ('Tokenized Collateral in Traditional Markets', 95, 54, 31, 9, 180),
-  ('Stablecoin-based Neobanks',         92, 56, 32, 7, 180),
-  ('Regulated ICOs',                    85, 59, 36, 7, 180),
-  ('Onchain FX',                        79, 62, 39, 5, 180),
-  ('Undercollateralized Lending',        74, 65, 41, 5, 180),
-  ('Yield Tokenization',                68, 68, 44, 5, 180),
-  ('AI Agents on Crypto Rails',         61, 72, 47, 4, 180),
-  ('Payments-focused Blockchains',      52, 76, 52, 4, 180)
-on conflict (name) do nothing;
+  ('Tokenized Equities',               235, 82, 0, 57, 317),
+  ('Onchain Vaults',                    225, 92, 0, 44, 317),
+  ('Prediction Markets',                219, 98, 0, 38, 317),
+  ('Equity Perpetuals',                 203, 114, 0, 29, 317),
+  ('Stablecoin-linked Cards',           197, 120, 0, 25, 317),
+  ('Onchain Privacy',                   184, 133, 0, 22, 317),
+  ('Stablecoin-based Cross-Border Payments', 178, 139, 0, 19, 317),
+  ('Tokenized Collateral in Traditional Markets', 168, 149, 0, 16, 317),
+  ('Stablecoin-based Neobanks',         162, 155, 0, 13, 317),
+  ('Regulated ICOs',                    149, 168, 0, 13, 317),
+  ('Onchain FX',                        139, 178, 0, 10, 317),
+  ('Undercollateralized Lending',        130, 187, 0, 10, 317),
+  ('Yield Tokenization',                120, 197, 0, 10, 317),
+  ('AI Agents on Crypto Rails',         108, 209, 0, 6, 317),
+  ('Payments-focused Blockchains',      92, 225, 0, 6, 317)
+on conflict (name) do update set
+  excited_count = excluded.excited_count,
+  meh_count = excluded.meh_count,
+  skip_count = excluded.skip_count,
+  first_pick_count = excluded.first_pick_count,
+  total_voters = excluded.total_voters;
