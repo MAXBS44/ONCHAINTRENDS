@@ -268,8 +268,11 @@ function phase1Vote(choice) {
   document.getElementById('p1-progress-fill').style.width = pct + '%';
   document.getElementById('p1-current').textContent = Math.min(phase1Index + 1, TRENDS.length);
 
-  localVotesBumps++;
-  updateVoteCounter();
+  // Only bump counter once per full session (not per swipe)
+  if (phase1Index === 1) {
+    localVotesBumps++;
+    updateVoteCounter();
+  }
 
   showSentimentBars(trend, choice);
 }
